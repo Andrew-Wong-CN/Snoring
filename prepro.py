@@ -65,6 +65,7 @@ def get_mel_phase(y_32k):
 
     return mel, phase
 
+
 def get_mel_phase_batch(y_batch):
     mels = []
     phases = []
@@ -75,17 +76,19 @@ def get_mel_phase_batch(y_batch):
     return numpy.asarray(mels), numpy.asarray(phases)
 
 
-
 def separate_channels(audio_data):
     '''
 
     :param y: dual channel audio
     :return: left and right channels
     '''
-    shape = audio_data.shape
-    left = audio_data[..., 0:shape[1]+1:2]
-    right = audio_data[..., 1:shape[1]+1:2]
+    # shape = audio_data.shape
+    # left = audio_data[..., 0:shape[1]+1:2]
+    # right = audio_data[..., 1:shape[1]+1:2]
+    left = audio_data[:, 0, :]
+    right = audio_data[:, 1, :]
     return left, right
+
 
 def concat_mel_and_phase(data):
     concat_data = []

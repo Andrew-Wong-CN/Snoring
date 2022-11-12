@@ -29,7 +29,7 @@ class SnoringDataset(Dataset):
     def __getitem__(self, idx):
         # 按照索引获取标签及录音文件
         audio_path = os.path.join(self.dataset_path, f'{self.labels.iloc[idx, 0]}.wav')
-        audio = librosa.load(audio_path, sr=32000)
+        audio = librosa.load(audio_path, sr=32000, mono=False)
         label = self.labels.iloc[idx, 1]
         # 将string类型label与数值映射
         # WK:4   N1:0    N2:1    N3:2    REM:3
