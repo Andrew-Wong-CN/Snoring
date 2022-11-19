@@ -12,7 +12,7 @@ import torch.nn as nn
 import numpy
 from torch import Tensor
 
-from loss import crossentropyloss
+from loss import loss_cross
 from torch.utils.data import DataLoader
 from prepro import get_mel_phase, get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
@@ -24,7 +24,7 @@ epochs = 10
 batch_size = 128
 
 model = Staging()
-loss_fn = nn.CrossEntropyLoss()
+loss_fn = loss_cross
 optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
 
@@ -104,6 +104,8 @@ def train():
             test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
             train_loop(dataloader=train_loader,model=model,loss_fn=loss_fn,optimizer=optimizer)
             # ,device = 'cuda:0'
+            test_loop(test_loader,model,loss_fn)
+    print("Done")
 
 
 if __name__ == "__main__":

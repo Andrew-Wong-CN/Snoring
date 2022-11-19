@@ -21,7 +21,7 @@ class Staging(nn.Module):
         # blstm block * 2 时域融合
         self.BlstmBlock = BlstmBlock(input_size=40)
         # fully connect *2 + softmax 定位头
-        self.Classification = Classification(in_features=40, out_features=10, mid_features=20)
+        self.Classification = Classification(in_features=40, out_features=5, mid_features=10)
 
     def forward(self,input):
         """
