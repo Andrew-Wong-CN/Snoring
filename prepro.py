@@ -7,7 +7,7 @@ import os
 import librosa
 import numpy
 import numpy as np
-import scipy.io.wavfile
+import scipy.io.wavfile as wav
 
 sample_rate = 16000  # sample rate
 sample_rate_original = 32000  # original sample rate
@@ -16,17 +16,16 @@ frame_length = 0.128  # frame length(seconds)
 frame_shift = 0.064  # frame shift(seconds)
 hop_length = int(sample_rate * frame_shift)  # (number of sample points)
 win_length = int(sample_rate * frame_length)
-n_mels = 80  # Number of Mel banks to generate
+n_mels = 20  # Number of Mel banks to generate
 power = 1.2
-preemphasis = .97
+pre_emphasis = .97
 max_db = 100
 ref_db = 20
 top_db = 15  # the threshold below reference to consider as silence
 
 
-def get_mel_phase(y_32k):
+def get_mel_phase(y):
     """
-
     :param:
         :type audio file (32k)
     :return:
@@ -37,20 +36,21 @@ def get_mel_phase(y_32k):
     # loading sound life
     # y_32k, sr = librosa.load(fpath, sr=sample_rate_original)
 
-    #  resampling
-    y = librosa.resample(y_32k, sample_rate_original, sample_rate)
+     # resampling
+    # y = librosa.resample(y, orig_sr=32000, target_sr=16000)
 
     # Trimming causes the output is not same shape
     # y, _ = librosa.effects.trim(y, top_db=top_db)
 
     # Pre-emphasis
-    y = np.append(y[0], y[1:] - preemphasis * y[:-1])
+    y = np.append(y[0], y[1:] - pre_emphasis * y[:-1])
 
     # stft
     linear = librosa.stft(y=y,
                           n_fft=n_fft,
                           hop_length=hop_length,
-                          win_length=win_length)
+                          win_length=win_length,
+                          center=True)
 
     # magnitude spectrogram
     mag = np.abs(linear)  # (1+n_fft//2,T)
@@ -61,7 +61,7 @@ def get_mel_phase(y_32k):
     mel = numpy.transpose(mel, (1, 0))
 
     # get phase
-    phase = np.angle(mel)
+    phase = np.angle(mel) # return the angle of the complex argument
 
     return mel, phase
 
@@ -95,3 +95,24 @@ def concat_mel_and_phase(data):
     for i in range(data[0].shape[0]):
         concat_data.append(list(map(lambda x: x[i], data)))
     return numpy.asarray(concat_data)
+
+# run the code below to transpose all the 32k sampling audio into 16k sampling audio
+if __name__ == "__main__":
+    folder = "F:\\Dataset"
+    subjects = os.listdir(folder)
+    for subject in subjects:
+        subject_path = folder + "\\" + subject
+        snoring = subject_path + "\\" + "Snoring_16k"
+        if not os.path.exists(snoring):
+            os.makedirs(snoring)
+        audio_list = os.listdir(subject_path + "\\" + "Snoring")
+        i = 0
+        for audio in audio_list:
+            audio_name = str(i) + ".wav"
+            audio_path = subject_path + "\\" + "Snoring" + "\\" + audio
+            audio_data, sr = librosa.load(audio_path, sr=32000, mono=False)
+            audio_data = librosa.resample(audio_data, orig_sr=32000, target_sr=16000)
+            audio_data = audio_data.T
+            audio_save_path = snoring + "\\" + audio_name
+            wav.write(audio_save_path, 16000, audio_data)
+            i += 1

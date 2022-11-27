@@ -5,11 +5,11 @@
 """
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as func
 
 
 class Conv2d(nn.Module):
-    def __init__(self, input_size, out_channels, kernel_size, stride, padding, paddingmode='zeros'):
+    def __init__(self, input_size, out_channels,kernel_size, stride, padding):
         """
 
         :param input_size: the number of input channels
@@ -17,7 +17,6 @@ class Conv2d(nn.Module):
         :param kernel_size: the size of kernel
         :param stride: stride
         :param padding: number of padding
-        :param paddingmode:zero default
         """
         super(Conv2d, self).__init__()
         self.conv = nn.Conv2d(input_size, out_channels=out_channels,
@@ -56,29 +55,24 @@ class InceptionBlock(nn.Module):
         self.BatchNorm = nn.BatchNorm2d(num_features=config[0][0] + config[1][1] + config[3][1] + config[2][1])
         self.num = num
 
-    def forward(self, input):
-        output1 = self.conv1(input)
+    def forward(self, x):
 
-        output2 = self.conv3_1(input)
-
+        output1 = self.conv1(x)
+        output2 = self.conv3_1(x)
         output2 = self.conv3_3(output2)
-
-        output3 = self.conv5_1(input)
-
+        output3 = self.conv5_1(x)
         output3 = self.conv5_5(output3)
-
-        output4 = self.max_pool_1(input)
-
+        output4 = self.max_pool_1(x)
         output4 = self.conv_max_1(output4)
 
-        return F.relu(self.BatchNorm(torch.cat([output1, output2, output3, output4], dim=self.depth_dim)))
+        return func.relu(self.BatchNorm(torch.cat([output1, output2, output3, output4], dim=self.depth_dim)))
 
 # TODO: fix parameters
 class Inception(nn.Module):
     def __init__(self):
         super(Inception, self).__init__()
 
-        self.inception_1 = InceptionBlock(depth_dim=1, input_size=4, config=[[2], [4, 8], [1, 2], [3, 2]], num='in1')
+        self.inception_1 = InceptionBlock(depth_dim=1, input_size=2, config=[[2], [4, 8], [1, 2], [3, 2]], num='in1')
         self.inception_2 = InceptionBlock(1, 14, [[2], [2, 4], [1, 2], [3, 2]])
         self.inception_3 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
         self.inception_4 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
@@ -87,15 +81,14 @@ class Inception(nn.Module):
         self.max_pool_12 = nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2), padding=0)
         self.conv256 = nn.Conv2d(in_channels=10, out_channels=1, kernel_size=(1, 1))
 
-    def forward(self, input):
-        output = input
+    def forward(self, input_):
+        output = input_
         output = self.inception_1(output)
         output = self.inception_2(output)
-        output = self.inception_3(output)
-        output = self.inception_4(output)
-        output = self.inception_5(output)
-        output = self.inception_6(output)
-
+        # output = self.inception_3(output)
+        # output = self.inception_4(output)
+        # output = self.inception_5(output)
+        # output = self.inception_6(output)
         output = self.max_pool_12(output)
         output = self.conv256(output)
         output = torch.squeeze(output, dim=1)
@@ -104,7 +97,7 @@ class Inception(nn.Module):
 
 
 if __name__ == "__main__":
-    from torchsummary import summary
+    from torchinfo import summary
 
     model = Inception()
 

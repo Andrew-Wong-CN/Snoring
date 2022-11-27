@@ -5,83 +5,172 @@
 """
 
 import os
-import time
 
+import numpy as np
 import torch
-import torch.nn as nn
 import numpy
-from torch import Tensor
-
-from loss import loss_cross
+from loss import loss_cross, one_hot
 from torch.utils.data import DataLoader
-from prepro import get_mel_phase, get_mel_phase_batch, concat_mel_and_phase
+from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
 from models.Staging import Staging
+from torchsummary import summary
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print(f"Using {device} device")
 
 learning_rate = 1e-3
 epochs = 10
-batch_size = 128
+batch_size = 16
 
 model = Staging()
+# model.load_state_dict(torch.load("model.pth"))
+model.to(device)
+pytorch_total_params = sum(p.numel() for p in model.parameters())
+print(pytorch_total_params)
+
 loss_fn = loss_cross
-optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
 
+def train_loop(dataloader, train_model, train_loss_fn, optimizer):
 
-def train_loop(dataloader, model, loss_fn, optimizer):
-    #TODO device
     size = len(dataloader.dataset)
-    for batch, (input, label) in enumerate(dataloader):
-        input = input[0].numpy()
-        #  separate two channels
-        input_left, input_right = separate_channels(input)
+    for batch, (input_, label) in enumerate(dataloader):
 
-        # get mel-spectrogram and phase
+        input_ = input_[0].numpy()
+
+        #  separate two channels
+        input_left, input_right = separate_channels(input_)
+
+        # get mel-spectrogram and phase, only use mel now!!!
         input_left_mel, input_left_phase = get_mel_phase_batch(input_left)
         input_right_mel, input_right_phase = get_mel_phase_batch(input_right)
 
-        # # copy on GPU
-        # input_left_mel = input_left_mel.to(device)
-        # input_left_phase = input_left_phase.to(device)
-        # input_right_mel = input_right_mel.to(device)
-        # input_right_phase = input_right_phase.to(device)
+        # concatenate mag1, mag2
+        data = concat_mel_and_phase((input_left_mel, input_right_mel))
 
-        # 拼接mag1, mag2, phase1, phase2
-        data = concat_mel_and_phase((input_left_mel, input_right_mel, input_left_phase, input_right_phase))
-        # numpy.ndarray转torch
+        # transform data from array to Tensor
         data_torch = torch.Tensor(numpy.asarray(data))
+        data_torch = data_torch.to(device)
+
         # compute prediction and loss
-        pred = model(data_torch)
-        loss = loss_fn(pred, label)
+        pred1, pred2 = train_model(data_torch) # pred1 without softmax, pred2 with softmax
+        pred1 = pred1.to(device)
+        label = label.to(device)
+        loss = train_loss_fn(pred1, label)
 
         # Backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        if batch % 100 == 0:
-            loss, current = loss.item(), batch * len(input)
-            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        loss, current = loss.item(), batch * batch_size
+        print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
-def test_loop(dataloader, model, loss_fn):
+def test_loop(dataloader, test_model, test_loss_fn):
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     test_loss, correct = 0, 0
+    correct_class = np.zeros(5) # correct_class[0] represents the number of correct prediction of 'N1'
+    size_class = np.zeros(5) # store the number of labels of each class
+    # correct_n1, correct_n2, correct_n3, correct_rem, correct_wk = 0, 0, 0, 0, 0
+    # size_n1, size_n2, size_n3, size_rem, size_wk = 0, 0, 0, 0, 0
+
     with torch.no_grad():
         for X, y in dataloader:
-            pred = model(X)
-            test_loss += loss_fn(pred, y).item()
-            correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
+            X = X[0].numpy()
+            input_left, input_right = separate_channels(X)
+            input_left_mel, input_left_phase = get_mel_phase_batch(input_left)
+            input_right_mel, input_right_phase = get_mel_phase_batch(input_right)
+            data = concat_mel_and_phase((input_left_mel, input_right_mel))
+
+            data_torch = torch.Tensor(numpy.asarray(data))
+            data_torch = data_torch.to(device)
+            y = y.to(device)
+
+            # pred1 without softmax, pred2 with softmax
+            pred1, pred2 = test_model(data_torch)
+            test_loss += test_loss_fn(pred1, y).item()
+
+            # target = one_hot(y, num_classes=5) # one-hot encoding labels
+            pred_label = torch.argmax(pred2, dim=1)
+            # target_argmax = torch.argmax(target, dim=1) # target_argmax represents the current label
+            for i in range(len(pred_label)):
+                if pred_label[i] == y[i]:
+                    correct += 1
+                    correct_class[pred_label[i]] += 1
+                size_class[y[i]] += 1
+
+            # category = torch.arange(0, 5, 1)
+            # category = category.to(device)
+            # pred_1 = torch.sum(torch.mul(category, pred), dim=-1)  # ??? 算加权平均，平均是哪个类，如果哪个类的概率高则偏向哪个类
+            # pred_2 = torch.round(pred_1)
+            # pred_2 = pred_2.int()
+            # # pred_2 = torch.reshape(pred_2, pred.size(1))
+            # for b in range(pred_2.size(0)): # size(0) is batch size, calculate the accuracy in each batch
+            #     # pred_2 size is (batch, frames) frames上所有frame对应预测标签的众数作为该segment对应的标签
+            #     t = torch.argmax(torch.bincount(pred_2[b]))
+            #     if t == y[b]:
+            #         correct += 1
+            #         if t.item() == 0:
+            #             correct_n1 += 1
+            #         elif t.item() == 1:
+            #             correct_n2 += 1
+            #         elif t.item() == 2:
+            #             correct_n3 += 1
+            #         elif t.item() == 3:
+            #             correct_rem += 1
+            #         elif t.item() == 4:
+            #             correct_wk += 1
+            # t1 = torch.bincount(y)
+            # size_n1 += t1[0].item()
+            # size_n2 += t1[1].item()
+            # size_n3 += t1[2].item()
+            # size_rem += t1[3].item()
+            # size_wk += t1[4].item()
     test_loss /= num_batches
-    correct /=size
-    print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    correct /= size
+    accuracy = np.zeros(5)
+    for i in range(len(size_class)):
+        if size_class[i] == 0:
+            size_class[i] = 1
+    if not 0 in size_class:
+        accuracy = correct_class / size_class
+    # if size_n1 != 0:
+    #     correct_n1 /= size_n1
+    # else:
+    #     correct_n1 = 1.2
+    # if size_n2 != 0:
+    #     correct_n2 /= size_n2
+    # else:
+    #     correct_n2 = 1.2
+    # if size_n3 != 0:
+    #     correct_n3 /= size_n3
+    # else:
+    #     correct_n3 = 1.2
+    # if size_rem != 0:
+    #     correct_rem /= size_rem
+    # else:
+    #     correct_rem = 1.2
+    # if size_wk != 0:
+    #     correct_wk /= size_wk
+    # else:
+    #     correct_wk = 1.2
+    print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f}")
+    print(f"Accuracy for N1 {(100 * accuracy[0]):>0.1f}%")
+    print(f"Accuracy for N2 {(100 * accuracy[1]):>0.1f}%")
+    print(f"Accuracy for N3 {(100 * accuracy[2]):>0.1f}%")
+    print(f"Accuracy for REM {(100 * accuracy[3]):>0.1f}%")
+    print(f"Accuracy for WK {(100 * accuracy[4]):>0.1f}% \n")
+    print("--------------------")
 
 def train():
     # device = 'cuda'
     # 遍历每个subject
-    subject_path = 'D:\\Ameixa\\学习\\实验室\\Snoring Detection\\DataSet\\'
+    subject_path = 'F:\\Dataset'
     print(os.listdir(subject_path))
     subjects = os.listdir(subject_path)
     # 初始化模型、优化器
@@ -91,22 +180,25 @@ def train():
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         for subject in subjects:
+            print(f"Current subject: {subject}")
             # 初始化数据加载
             dataset = SnoringDataset(
                 label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
-                dataset_path=f'{subject_path}\\{subject}\\Snoring'
-            )
-            train_size = int(len(dataset) * 0.7)
-            test_size = int(len(dataset) * 0.3)
+                dataset_path=f'{subject_path}\\{subject}\\Snoring_16k')
+            train_test_size_file = open(f"{subject_path}\\{subject}\\TrainTestSize.txt", "r+")
+            size = train_test_size_file.readlines()
+            train_size = int(size[0])
+            test_size = int(size[1])
+            train_test_size_file.close()
             train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-            #  TODO: shuffle=False
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
-            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
-            train_loop(dataloader=train_loader,model=model,loss_fn=loss_fn,optimizer=optimizer)
-            # ,device = 'cuda:0'
+            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
+            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+            train_loop(dataloader=train_loader, train_model=model, train_loss_fn=loss_fn, optimizer=optimizer)
             test_loop(test_loader,model,loss_fn)
     print("Done")
 
 
 if __name__ == "__main__":
     train()
+    torch.save(model.state_dict(), "model_1.pth")
+    print("Saved PyTorch Model State to model_1.pth")

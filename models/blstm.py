@@ -8,7 +8,7 @@ import torch.nn as nn
 
 
 class BlstmBlock(nn.Module):
-    def __init__(self, input_size, hidden_size=20):
+    def __init__(self, input_size, hidden_size):
         """
 
         :param input_size: number of input features
@@ -17,34 +17,34 @@ class BlstmBlock(nn.Module):
         self.hidden_size = hidden_size
         super(BlstmBlock, self).__init__()
         self.random = False
-        self.Bilsm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
-                             num_layers=1, bidirectional=True,batch_first=True)
+        self.blstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
+                             num_layers=1, bidirectional=True, batch_first=True)
 
-    def forward(self, input):
-        batch = input.shape[1]
-        time_resolution = input.shape[0]
+    def forward(self, input_):
+        batch = input_.shape[1]
+        time_resolution = input_.shape[0]
         if not self.random:
-            output, (hn, cn) = self.Bilsm(input)
+            output, (hn, cn) = self.blstm(input_)
             return output
         h0 = torch.randn(time_resolution, batch, self.hidden_size)
         c0 = torch.randn(time_resolution, batch, self.hidden_size)
-        output, (hn, cn) = self.Bilsm(input, (h0, c0))
+        output, (hn, cn) = self.blstm(input_, (h0, c0))
         return output
 
 
 class Blstm(nn.Module):
 
-    def __init__(self, frequency=40, hidden_size=64, BR=True):
-        super(BlstmBlock, self).__init__()
+    def __init__(self, frequency=40, hidden_size=20, BR=True):
+        super(Blstm, self).__init__()
         self.Blstms1 = BlstmBlock(input_size=frequency, hidden_size=hidden_size)
         self.Blstms2 = BlstmBlock(input_size=2 * hidden_size, hidden_size=int(hidden_size / 2))
         self.BatchNorm = nn.BatchNorm1d(num_features=hidden_size)
         self.relu = nn.PReLU()
         self.BR = BR
 
-    def forward(self, input):
-        input = torch.transpose(input, 0, 1)
-        output = self.Blstms1(input)
+    def forward(self, input_):
+        input_ = torch.transpose(input_, 0, 1)
+        output = self.Blstms1(input_)
         output = self.Blstms2(output)
         output = torch.transpose(output, 0, 1)
         if self.BR:

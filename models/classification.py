@@ -7,13 +7,13 @@ import torch
 import torch.nn as nn
 
 
-class FBR(nn.Module):
+class FC(nn.Module):
     def __init__(self, in_features, out_features):
         """
         :param in_features: number of input channels
         :param out_features: number of output channels
         """
-        super(FBR, self).__init__()
+        super(FC, self).__init__()
         self.linear = nn.Linear(in_features=in_features, out_features=out_features)
         self.BN = nn.BatchNorm1d(out_features)
         self.relu = nn.ReLU()
@@ -26,34 +26,20 @@ class FBR(nn.Module):
 
 
 class Classification(nn.Module):
-    def __init__(self, in_features=40, out_features=5, mid_features=10):
+    def __init__(self, in_features, out_features, mid_features):
         super(Classification, self).__init__()
         # print('###init classification###')
-        self.FClassify1 = FBR(in_features=in_features, out_features=mid_features)
-        self.FClassify2 = FBR(in_features=mid_features, out_features=out_features)
+        self.Flatten = nn.Flatten(start_dim=1, end_dim=2)
+        self.FClassify1 = FC(in_features=in_features, out_features=mid_features)
+        self.FClassify2 = FC(in_features=mid_features, out_features=out_features)
         self.softmax = nn.Softmax(dim=-1)
 
-    def forward(self, input):
-        input0 = input.shape[0]
-        input1 = input.shape[1]
-        input = input.reshape(input0 * input1, -1)
-        output = self.FClassify1(input)
-        output = self.FClassify2(output)
-        output2 = output
-        output = self.softmax(output)
-        output = output.reshape(input0, input1, -1)
-        return output, output2
-
-
-if __name__ == '__main__':
-    x = torch.randn((2))
-    print(x)
-    import math
-
-    y = torch.randn((2))
-    x = torch.clamp(x, min=-math.pi, max=math.pi)
-    y = torch.clamp(y, min=-math.pi, max=math.pi)
-    # from sklearn.metrics.pairwise import haversine_distances
-    #
-    # result = haversine_distances([x, y])
-    print(1 / torch.sqrt(1 - torch.cos(torch.tensor(0.0003))))
+    def forward(self, input_):
+        output = input_.reshape(input_.shape[0], input_.shape[1] * input_.shape[2])
+        output = self.FClassify1(output)
+        output = self.FClassify2(output) # size: (16 * 936 B * T, 5)
+        output1 = output
+        output2 = self.softmax(output)
+        # output1 without softmax, used for loss;
+        # output2 with softmax, used for test
+        return output1, output2
