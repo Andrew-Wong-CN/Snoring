@@ -1,34 +1,27 @@
-# -*- coding:utf-8 -*-
-"""
-作者：Ameixa
-日期：2022年10月21日
-"""
-
 import os
-
 import numpy as np
 import torch
 import numpy
-from loss import loss_cross, one_hot
-from torch.utils.data import DataLoader
+from loss import loss_cross
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
-from models.Staging import Staging
-
+from models.stagingnet import StagingNet
+from dataset import get_current_class_distribution
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-# print(f"Using {device} device")
+print(f"Using {device} device")
 
 learning_rate = 1e-3
 epochs = 10
 batch_size = 16
 
-model = Staging()
+model = StagingNet()
 # model.load_state_dict(torch.load("model_1.pth"))
-# model.to(device)
+model.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
-# print(pytorch_total_params)
+print(pytorch_total_params)
 
 loss_fn = loss_cross
 
@@ -36,12 +29,16 @@ loss_fn = loss_cross
 def train_loop(dataloader, train_model, train_loss_fn, optimizer):
 
     size = len(dataloader.dataset)
-    for batch, (input_, label) in enumerate(dataloader):
 
-        input_ = input_[0].numpy()
+    # batch_idx is the index of current batch, the 1st batch, 2nd batch
+    # x is the original data in dataset
+    # y is label(s, if batch > 1) of current data
+    for batch_idx, (x, y) in enumerate(dataloader):
+
+        x = x[0].numpy()
 
         # separate two channels
-        input_left, input_right = separate_channels(input_)
+        input_left, input_right = separate_channels(x)
 
         # get mel-spectrogram and phase, only use mel now!!!
         input_left_mel, input_left_phase = get_mel_phase_batch(input_left)
@@ -57,15 +54,15 @@ def train_loop(dataloader, train_model, train_loss_fn, optimizer):
         # compute prediction and loss
         pred1, pred2 = train_model(data_torch) # pred1 without softmax, pred2 with softmax
         pred1 = pred1.to(device)
-        label = label.to(device)
-        loss = train_loss_fn(pred1, label)
+        y = y.to(device)
+        loss = train_loss_fn(pred1, y)
 
         # backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
-        loss, current = loss.item(), batch * batch_size
+        loss, current = loss.item(), batch_idx * batch_size
         print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
@@ -77,13 +74,16 @@ def test_loop(dataloader, test_model, test_loss_fn):
     correct_class = np.zeros(5) # correct_class[0] represents the number of correct prediction of 'N1'
     size_class = np.zeros(5) # store the number of labels of each class
 
-
     with torch.no_grad():
-        for X, y in dataloader:
+
+        # x is the original data in dataset
+        # y is label(s, if batch > 1) of current data
+        # NOTE: if batch_size > 1, len(x) and len(y) equal to batch_size
+        for x, y in dataloader:
 
             # separate audio into two channels, get mel magnitude spectrum and concatenate them
-            X = X[0].numpy()
-            input_left, input_right = separate_channels(X)
+            x = x[0].numpy()
+            input_left, input_right = separate_channels(x)
             input_left_mel, input_left_phase = get_mel_phase_batch(input_left)
             input_right_mel, input_right_phase = get_mel_phase_batch(input_right)
             data = concat_mel_and_phase((input_left_mel, input_right_mel))
@@ -96,6 +96,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
             # pred1 without softmax, pred2 with softmax
             pred1, pred2 = test_model(data_torch)
             test_loss += test_loss_fn(pred1, y).item()
+
 
             # compute the count of each label predicted correctly and the size of each label
             pred_label = torch.argmax(pred2, dim=1)
@@ -123,7 +124,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
     print(f"Accuracy for WK {(100 * accuracy[4]):>0.1f}% \n")
     print("--------------------")
 
-def train():
+def main():
 
     # subject means the data of each patient
     subject_path = 'F:\\Dataset'
@@ -152,9 +153,37 @@ def train():
             train_test_size_file.close()
             train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
 
+            # compute weights
+            # targets_train is a tensor of target labels of train set, targets_test is the same
+            targets_train = SnoringDataset.get_targets(label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
+                                                                   indices=train_dataset.indices)
+            targets_test = SnoringDataset.get_targets(label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
+                                                                 indices=test_dataset.indices)
+            class_count_train = [i for i in get_current_class_distribution(targets_train).values()]
+            class_count_test = [i for i in get_current_class_distribution(targets_test).values()]
+            class_weights_train = 1. / torch.tensor(class_count_train, dtype=torch.float32)
+            class_weights_test = 1. / torch.tensor(class_count_test, dtype=torch.float32)
+            weights_train = class_weights_train[targets_train]
+            weights_test = class_weights_test[targets_test]
+
+            # define the weighted random sampler
+            # replacement=True means samples can be drawn in multiple times
+            weighted_sampler_train = WeightedRandomSampler(weights=weights_train,
+                                                           num_samples=len(train_dataset),
+                                                           replacement=True)
+            weighted_sampler_test = WeightedRandomSampler(weights=weights_test,
+                                                          num_samples=len(test_dataset),
+                                                          replacement=True)
+
             # load data
-            train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-            test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+            train_loader = DataLoader(dataset=train_dataset,
+                                      batch_size=batch_size,
+                                      shuffle=False,
+                                      sampler=weighted_sampler_train)
+            test_loader = DataLoader(dataset=test_dataset,
+                                     batch_size=batch_size,
+                                     shuffle=False,
+                                     sampler=weighted_sampler_test)
 
             # train and test model
             train_loop(dataloader=train_loader, train_model=model, train_loss_fn=loss_fn, optimizer=optimizer)
@@ -162,52 +191,8 @@ def train():
 
     print("Done")
 
-def get_class_distribution():
-    subject_path = 'F:\\Dataset'
-    subjects = os.listdir(subject_path)
-    stage_dict = {
-        # 单向map
-        'N1': 0,
-        'N2': 1,
-        'N3': 2,
-        'REM': 3,
-        'WK': 4,
-    }
-    count_all_dict = {k: 0 for k, v in stage_dict.items()}
-    percent_all_dict = {k: " " for k, v in stage_dict.items()}
-    for subject in subjects:
-        dataset = SnoringDataset(
-            label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
-            dataset_path=f'{subject_path}\\{subject}\\Snoring_16k')
-        idx2class = {v: k for k, v in stage_dict.items()}
-        count_dict = {k: 0 for k, v in stage_dict.items()}
-        percent_dict = {k: " " for k, v in stage_dict.items()}
-        for element in dataset:
-            y_lbl = element[1]
-            y_lbl = idx2class[y_lbl]
-            count_dict[y_lbl] += 1
-        sum_ = 0
-        for k, v in count_dict.items():
-            sum_ += v
-        for k, v in count_dict.items():
-            percent_dict[k] = f"{(v / sum_) * 100:>0.1f}%"
-        for k, v in count_dict.items():
-            count_all_dict[k] += v
-        print(f"Subject: {subject}".center(80, '-'))
-        print(count_dict)
-        print(percent_dict)
-    sum_ = 0
-    for k, v in count_all_dict.items():
-        sum_ += v
-    for k, v in count_all_dict.items():
-        percent_all_dict[k] = f"{(v / sum_) * 100:>0.1f}%"
-    print("Data Distribution of All Subjects".center(80, '-'))
-    print(count_all_dict)
-    print(percent_all_dict)
-
 
 if __name__ == "__main__":
-    # train()
-    # torch.save(model.state_dict(), "model_2.pth")
-    # print("Saved PyTorch Model State to model_2.pth")
-    get_class_distribution()
+    main()
+    torch.save(model.state_dict(), "model_3.pth")
+    print("Saved PyTorch Model State to model_3.pth")

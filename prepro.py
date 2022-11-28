@@ -1,8 +1,3 @@
-# -*- coding:utf-8 -*-
-"""
-作者：Ameixa
-日期：2022年10月01日
-"""
 import os
 import librosa
 import numpy
@@ -16,7 +11,7 @@ frame_length = 0.128  # frame length(seconds)
 frame_shift = 0.064  # frame shift(seconds)
 hop_length = int(sample_rate * frame_shift)  # (number of sample points)
 win_length = int(sample_rate * frame_length)
-n_mels = 20  # Number of Mel banks to generate
+mel_frequency_bins = 20  # Number of Mel banks to generate
 power = 1.2
 pre_emphasis = .97
 max_db = 100
@@ -25,27 +20,11 @@ top_db = 15  # the threshold below reference to consider as silence
 
 
 def get_mel_phase(y):
-    """
-    :param:
-        :type audio file (32k)
-    :return:
-        mel: 幅度谱（频谱）A 2d array of shape (T,n_mels)
-        phase: 相位谱
-    """
 
-    # loading sound life
-    # y_32k, sr = librosa.load(fpath, sr=sample_rate_original)
-
-     # resampling
-    # y = librosa.resample(y, orig_sr=32000, target_sr=16000)
-
-    # Trimming causes the output is not same shape
-    # y, _ = librosa.effects.trim(y, top_db=top_db)
-
-    # Pre-emphasis
+    # pre-emphasis
     y = np.append(y[0], y[1:] - pre_emphasis * y[:-1])
 
-    # stft
+    # short time fourier transform
     linear = librosa.stft(y=y,
                           n_fft=n_fft,
                           hop_length=hop_length,
@@ -56,7 +35,7 @@ def get_mel_phase(y):
     mag = np.abs(linear)  # (1+n_fft//2,T)
 
     # compute a mel-scale spectrogram
-    mel = librosa.feature.melspectrogram(S=mag, n_mels=n_mels)
+    mel = librosa.feature.melspectrogram(S=mag, n_mels=mel_frequency_bins)
     mel = librosa.power_to_db(mel, ref=numpy.max)
     mel = numpy.transpose(mel, (1, 0))
 
@@ -67,26 +46,18 @@ def get_mel_phase(y):
 
 
 def get_mel_phase_batch(y_batch):
-    mels = []
-    phases = []
+    mel_list = []
+    phase_list = []
     for i in y_batch:
         mel, phase = get_mel_phase(i)
-        mels.append(mel)
-        phases.append(phase)
-    return numpy.asarray(mels), numpy.asarray(phases)
+        mel_list.append(mel)
+        phase_list.append(phase)
+    return numpy.asarray(mel_list), numpy.asarray(phase_list)
 
 
-def separate_channels(audio_data):
-    '''
-
-    :param y: dual channel audio
-    :return: left and right channels
-    '''
-    # shape = audio_data.shape
-    # left = audio_data[..., 0:shape[1]+1:2]
-    # right = audio_data[..., 1:shape[1]+1:2]
-    left = audio_data[:, 0, :]
-    right = audio_data[:, 1, :]
+def separate_channels(y):
+    left = y[:, 0, :]
+    right = y[:, 1, :]
     return left, right
 
 
@@ -98,6 +69,7 @@ def concat_mel_and_phase(data):
 
 # run the code below to transpose all the 32k sampling audio into 16k sampling audio
 if __name__ == "__main__":
+
     folder = "F:\\Dataset"
     subjects = os.listdir(folder)
     for subject in subjects:
@@ -106,13 +78,13 @@ if __name__ == "__main__":
         if not os.path.exists(snoring):
             os.makedirs(snoring)
         audio_list = os.listdir(subject_path + "\\" + "Snoring")
-        i = 0
+        m = 0
         for audio in audio_list:
-            audio_name = str(i) + ".wav"
+            audio_name = str(m) + ".wav"
             audio_path = subject_path + "\\" + "Snoring" + "\\" + audio
             audio_data, sr = librosa.load(audio_path, sr=32000, mono=False)
             audio_data = librosa.resample(audio_data, orig_sr=32000, target_sr=16000)
             audio_data = audio_data.T
             audio_save_path = snoring + "\\" + audio_name
             wav.write(audio_save_path, 16000, audio_data)
-            i += 1
+            m += 1
