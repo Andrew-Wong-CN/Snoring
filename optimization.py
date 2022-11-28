@@ -15,23 +15,23 @@ from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
 from models.Staging import Staging
-from torchsummary import summary
+
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-print(f"Using {device} device")
+# print(f"Using {device} device")
 
 learning_rate = 1e-3
 epochs = 10
 batch_size = 16
 
 model = Staging()
-# model.load_state_dict(torch.load("model.pth"))
-model.to(device)
+# model.load_state_dict(torch.load("model_1.pth"))
+# model.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
-print(pytorch_total_params)
+# print(pytorch_total_params)
 
 loss_fn = loss_cross
-# optimizer = torch.optim.SGD(model.parameters(), lr=learning_rate)
+
 
 def train_loop(dataloader, train_model, train_loss_fn, optimizer):
 
@@ -40,7 +40,7 @@ def train_loop(dataloader, train_model, train_loss_fn, optimizer):
 
         input_ = input_[0].numpy()
 
-        #  separate two channels
+        # separate two channels
         input_left, input_right = separate_channels(input_)
 
         # get mel-spectrogram and phase, only use mel now!!!
@@ -60,7 +60,7 @@ def train_loop(dataloader, train_model, train_loss_fn, optimizer):
         label = label.to(device)
         loss = train_loss_fn(pred1, label)
 
-        # Backpropagation
+        # backpropagation
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -70,23 +70,25 @@ def train_loop(dataloader, train_model, train_loss_fn, optimizer):
 
 
 def test_loop(dataloader, test_model, test_loss_fn):
+
     size = len(dataloader.dataset)
     num_batches = len(dataloader)
     test_loss, correct = 0, 0
     correct_class = np.zeros(5) # correct_class[0] represents the number of correct prediction of 'N1'
     size_class = np.zeros(5) # store the number of labels of each class
-    # correct_n1, correct_n2, correct_n3, correct_rem, correct_wk = 0, 0, 0, 0, 0
-    # size_n1, size_n2, size_n3, size_rem, size_wk = 0, 0, 0, 0, 0
+
 
     with torch.no_grad():
         for X, y in dataloader:
 
+            # separate audio into two channels, get mel magnitude spectrum and concatenate them
             X = X[0].numpy()
             input_left, input_right = separate_channels(X)
             input_left_mel, input_left_phase = get_mel_phase_batch(input_left)
             input_right_mel, input_right_phase = get_mel_phase_batch(input_right)
             data = concat_mel_and_phase((input_left_mel, input_right_mel))
 
+            # convert array to Tensor and move data to device
             data_torch = torch.Tensor(numpy.asarray(data))
             data_torch = data_torch.to(device)
             y = y.to(device)
@@ -95,42 +97,15 @@ def test_loop(dataloader, test_model, test_loss_fn):
             pred1, pred2 = test_model(data_torch)
             test_loss += test_loss_fn(pred1, y).item()
 
-            # target = one_hot(y, num_classes=5) # one-hot encoding labels
+            # compute the count of each label predicted correctly and the size of each label
             pred_label = torch.argmax(pred2, dim=1)
-            # target_argmax = torch.argmax(target, dim=1) # target_argmax represents the current label
             for i in range(len(pred_label)):
                 if pred_label[i] == y[i]:
                     correct += 1
                     correct_class[pred_label[i]] += 1
                 size_class[y[i]] += 1
 
-            # category = torch.arange(0, 5, 1)
-            # category = category.to(device)
-            # pred_1 = torch.sum(torch.mul(category, pred), dim=-1)  # ??? 算加权平均，平均是哪个类，如果哪个类的概率高则偏向哪个类
-            # pred_2 = torch.round(pred_1)
-            # pred_2 = pred_2.int()
-            # # pred_2 = torch.reshape(pred_2, pred.size(1))
-            # for b in range(pred_2.size(0)): # size(0) is batch size, calculate the accuracy in each batch
-            #     # pred_2 size is (batch, frames) frames上所有frame对应预测标签的众数作为该segment对应的标签
-            #     t = torch.argmax(torch.bincount(pred_2[b]))
-            #     if t == y[b]:
-            #         correct += 1
-            #         if t.item() == 0:
-            #             correct_n1 += 1
-            #         elif t.item() == 1:
-            #             correct_n2 += 1
-            #         elif t.item() == 2:
-            #             correct_n3 += 1
-            #         elif t.item() == 3:
-            #             correct_rem += 1
-            #         elif t.item() == 4:
-            #             correct_wk += 1
-            # t1 = torch.bincount(y)
-            # size_n1 += t1[0].item()
-            # size_n2 += t1[1].item()
-            # size_n3 += t1[2].item()
-            # size_rem += t1[3].item()
-            # size_wk += t1[4].item()
+    # compute the average test loss and accuracy
     test_loss /= num_batches
     correct /= size
     accuracy = np.zeros(5)
@@ -139,27 +114,8 @@ def test_loop(dataloader, test_model, test_loss_fn):
             size_class[i] = 1
     if not 0 in size_class:
         accuracy = correct_class / size_class
-    # if size_n1 != 0:
-    #     correct_n1 /= size_n1
-    # else:
-    #     correct_n1 = 1.2
-    # if size_n2 != 0:
-    #     correct_n2 /= size_n2
-    # else:
-    #     correct_n2 = 1.2
-    # if size_n3 != 0:
-    #     correct_n3 /= size_n3
-    # else:
-    #     correct_n3 = 1.2
-    # if size_rem != 0:
-    #     correct_rem /= size_rem
-    # else:
-    #     correct_rem = 1.2
-    # if size_wk != 0:
-    #     correct_wk /= size_wk
-    # else:
-    #     correct_wk = 1.2
-    print(f"Test Error: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f}")
+
+    print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f}")
     print(f"Accuracy for N1 {(100 * accuracy[0]):>0.1f}%")
     print(f"Accuracy for N2 {(100 * accuracy[1]):>0.1f}%")
     print(f"Accuracy for N3 {(100 * accuracy[2]):>0.1f}%")
@@ -168,37 +124,90 @@ def test_loop(dataloader, test_model, test_loss_fn):
     print("--------------------")
 
 def train():
-    # device = 'cuda'
-    # 遍历每个subject
+
+    # subject means the data of each patient
     subject_path = 'F:\\Dataset'
     print(os.listdir(subject_path))
     subjects = os.listdir(subject_path)
-    # 初始化模型、优化器
-    # model = Staging().to(device)
-    # TODO: weight_decay, lr参数修改
+
+    # initialize optimizer
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.005)
+
+    # iterate train and test for 10 times
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
         for subject in subjects:
             print(f"Current subject: {subject}")
-            # 初始化数据加载
+
+            # initialize dataset
             dataset = SnoringDataset(
                 label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
                 dataset_path=f'{subject_path}\\{subject}\\Snoring_16k')
+
+            # split train set and test set
             train_test_size_file = open(f"{subject_path}\\{subject}\\TrainTestSize.txt", "r+")
             size = train_test_size_file.readlines()
             train_size = int(size[0])
             test_size = int(size[1])
             train_test_size_file.close()
             train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
+
+            # load data
             train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
             test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
+
+            # train and test model
             train_loop(dataloader=train_loader, train_model=model, train_loss_fn=loss_fn, optimizer=optimizer)
             test_loop(test_loader,model,loss_fn)
+
     print("Done")
+
+def get_class_distribution():
+    subject_path = 'F:\\Dataset'
+    subjects = os.listdir(subject_path)
+    stage_dict = {
+        # 单向map
+        'N1': 0,
+        'N2': 1,
+        'N3': 2,
+        'REM': 3,
+        'WK': 4,
+    }
+    count_all_dict = {k: 0 for k, v in stage_dict.items()}
+    percent_all_dict = {k: " " for k, v in stage_dict.items()}
+    for subject in subjects:
+        dataset = SnoringDataset(
+            label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
+            dataset_path=f'{subject_path}\\{subject}\\Snoring_16k')
+        idx2class = {v: k for k, v in stage_dict.items()}
+        count_dict = {k: 0 for k, v in stage_dict.items()}
+        percent_dict = {k: " " for k, v in stage_dict.items()}
+        for element in dataset:
+            y_lbl = element[1]
+            y_lbl = idx2class[y_lbl]
+            count_dict[y_lbl] += 1
+        sum_ = 0
+        for k, v in count_dict.items():
+            sum_ += v
+        for k, v in count_dict.items():
+            percent_dict[k] = f"{(v / sum_) * 100:>0.1f}%"
+        for k, v in count_dict.items():
+            count_all_dict[k] += v
+        print(f"Subject: {subject}".center(80, '-'))
+        print(count_dict)
+        print(percent_dict)
+    sum_ = 0
+    for k, v in count_all_dict.items():
+        sum_ += v
+    for k, v in count_all_dict.items():
+        percent_all_dict[k] = f"{(v / sum_) * 100:>0.1f}%"
+    print("Data Distribution of All Subjects".center(80, '-'))
+    print(count_all_dict)
+    print(percent_all_dict)
 
 
 if __name__ == "__main__":
-    train()
-    torch.save(model.state_dict(), "model_1.pth")
-    print("Saved PyTorch Model State to model_1.pth")
+    # train()
+    # torch.save(model.state_dict(), "model_2.pth")
+    # print("Saved PyTorch Model State to model_2.pth")
+    get_class_distribution()
