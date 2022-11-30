@@ -9,6 +9,7 @@ from prepro import separate_channels
 from dataset import SnoringDataset
 from models.stagingnet import StagingNet
 from dataset import get_current_class_distribution
+from tabulate import tabulate
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
@@ -18,11 +19,10 @@ epochs = 10
 batch_size = 16
 
 model = StagingNet()
-# model.load_state_dict(torch.load("model_1.pth"))
+# model.load_state_dict(torch.load("model_5.pth"))
 model.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(pytorch_total_params)
-
 loss_fn = loss_cross
 
 
@@ -63,7 +63,8 @@ def train_loop(dataloader, train_model, train_loss_fn, optimizer):
         optimizer.step()
 
         loss, current = loss.item(), batch_idx * batch_size
-        print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+        if current % 64 == 0:
+            print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
 
 
 def test_loop(dataloader, test_model, test_loss_fn):
@@ -73,6 +74,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
     test_loss, correct = 0, 0
     correct_class = np.zeros(5) # correct_class[0] represents the number of correct prediction of 'N1'
     size_class = np.zeros(5) # store the number of labels of each class
+    confusion_matrix = np.zeros((5, 5), dtype=int)
 
     with torch.no_grad():
 
@@ -97,7 +99,6 @@ def test_loop(dataloader, test_model, test_loss_fn):
             pred1, pred2 = test_model(data_torch)
             test_loss += test_loss_fn(pred1, y).item()
 
-
             # compute the count of each label predicted correctly and the size of each label
             pred_label = torch.argmax(pred2, dim=1)
             for i in range(len(pred_label)):
@@ -105,6 +106,10 @@ def test_loop(dataloader, test_model, test_loss_fn):
                     correct += 1
                     correct_class[pred_label[i]] += 1
                 size_class[y[i]] += 1
+
+            # compute the confusion matrix
+            for i in range(len(y)):
+                confusion_matrix[y[i].item()][pred_label[i].item()] += 1
 
     # compute the average test loss and accuracy
     test_loss /= num_batches
@@ -115,14 +120,45 @@ def test_loop(dataloader, test_model, test_loss_fn):
             size_class[i] = 1
     if not 0 in size_class:
         accuracy = correct_class / size_class
+    accuracy = np.array([round(i, 2) for i in accuracy])
 
-    print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f}")
-    print(f"Accuracy for N1 {(100 * accuracy[0]):>0.1f}%")
-    print(f"Accuracy for N2 {(100 * accuracy[1]):>0.1f}%")
-    print(f"Accuracy for N3 {(100 * accuracy[2]):>0.1f}%")
-    print(f"Accuracy for REM {(100 * accuracy[3]):>0.1f}%")
-    print(f"Accuracy for WK {(100 * accuracy[4]):>0.1f}% \n")
-    print("--------------------")
+    # compute the precision and recall
+    precision = np.zeros(5)
+    recall = np.zeros(5)
+    for i in range(5):
+        if np.sum(confusion_matrix, axis=0)[i] != 0:
+            precision[i] = confusion_matrix[i][i] / np.sum(confusion_matrix, axis=0)[i]
+        if np.sum(confusion_matrix, axis=1)[i] != 0:
+            recall[i] = confusion_matrix[i][i] / np.sum(confusion_matrix, axis=1)[i]
+    precision = np.array([round(i, 2) for i in precision])
+    recall = np.array([round(i, 2) for i in recall])
+
+    # compute F1 score
+    f1 = np.zeros(5, dtype=float)
+    for i in range(5):
+        if precision[i] + recall[i] != 0.:
+            f1[i] = 2 * precision[i] * recall[i] / (precision[i] + recall[i])
+    f1 = np.array([round(i, 2) for i in f1])
+
+    # convert confusion matrix items to percentage
+    sum_ = np.sum(confusion_matrix, axis=1)
+    confusion_matrix = confusion_matrix.astype(float)
+    for i in range(5):
+        for j in range(5):
+            if sum_[i] != 0:
+                confusion_matrix[i][j] = round(confusion_matrix[i][j] / sum_[i], 2)
+    index = ["TN1", "TN2", "TN3", "TREM", "TWK"]
+    header = ["PN1", "PN2", "PN3", "PREM", "PWK"]
+    print("Confusion Matrix".center(46))
+    print(tabulate(confusion_matrix, headers=header, showindex=index, tablefmt="fancy_grid"))
+
+    # print test result
+    index = ["Accuracy", "Precision", "Recall", "F1"]
+    header = ["N1", "N2", "N3", "REM", "WK"]
+    info = np.array([accuracy, precision, recall, f1])
+    print("Performance Error".center(46))
+    print(tabulate(info, headers=header, showindex=index, tablefmt="fancy_grid"))
+
 
 def main():
 
@@ -194,5 +230,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-    torch.save(model.state_dict(), "model_3.pth")
-    print("Saved PyTorch Model State to model_3.pth")
+    torch.save(model.state_dict(), "model_6.pth")
+    print("Saved PyTorch Model State to model_6.pth")

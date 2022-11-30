@@ -153,3 +153,17 @@ separate stereo audio into mono audio
 #     model = BiLSTM(frequency=128)
 #
 #     summary(model, input_size=(356, 128), batch_size=2, device='cpu')
+
+# print(f"Test Error: \nAccuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f}")
+# print(f"Accuracy for N1 {(100 * accuracy[0]):>0.1f}%")
+# print(f"Accuracy for N2 {(100 * accuracy[1]):>0.1f}%")
+# print(f"Accuracy for N3 {(100 * accuracy[2]):>0.1f}%")
+# print(f"Accuracy for REM {(100 * accuracy[3]):>0.1f}%")
+# print(f"Accuracy for WK {(100 * accuracy[4]):>0.1f}%")
+# print("----------------------------------------------")
+# print(f"")
+# info = {"N1": [accuracy[0], precision[0], recall[0], f1[0]],
+#         "N2": [accuracy[1], precision[1], recall[1], f1[1]],
+#         "N3": [accuracy[2], precision[2], recall[2], f1[2]],
+#         "REM": [accuracy[3], precision[3], recall[3], f1[3]],
+#         "WK": [accuracy[4], precision[4], recall[4], f1[4]]}
