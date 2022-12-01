@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as func
 
 
-class Conv2d(nn.Module):
+class Conv2D(nn.Module):
     def __init__(self, input_size, out_channels,kernel_size, stride, padding):
         """
         :param input_size: the number of input channels
@@ -12,7 +12,7 @@ class Conv2d(nn.Module):
         :param stride: stride
         :param padding: number of padding
         """
-        super(Conv2d, self).__init__()
+        super(Conv2D, self).__init__()
         self.conv = nn.Conv2d(input_size, out_channels=out_channels,
                               kernel_size=kernel_size, stride=stride, padding=padding)
         self.BN = nn.BatchNorm2d(out_channels)
@@ -34,13 +34,13 @@ class InceptionBlock(nn.Module):
         """
         super().__init__()
         self.depth_dim = depth_dim
-        self.conv1 = Conv2d(input_size, out_channels=config[0][0], kernel_size=(1, 1), stride=(1, 1), padding=0)
-        self.conv3_1 = Conv2d(input_size, out_channels=config[1][0], kernel_size=(1, 1), stride=(1, 1), padding=0)
-        self.conv3_3 = Conv2d(config[1][0], config[1][1], kernel_size=(3, 3), stride=(1, 1), padding=1)
-        self.conv5_1 = Conv2d(input_size, out_channels=config[2][0], kernel_size=(1, 1), stride=(1, 1), padding=0)
-        self.conv5_5 = Conv2d(config[2][0], config[2][1], kernel_size=(5, 5), stride=(1, 1), padding=2)
+        self.conv1 = Conv2D(input_size, out_channels=config[0][0], kernel_size=(1, 1), stride=(1, 1), padding=0)
+        self.conv3_1 = Conv2D(input_size, out_channels=config[1][0], kernel_size=(1, 1), stride=(1, 1), padding=0)
+        self.conv3_3 = Conv2D(config[1][0], config[1][1], kernel_size=(3, 3), stride=(1, 1), padding=1)
+        self.conv5_1 = Conv2D(input_size, out_channels=config[2][0], kernel_size=(1, 1), stride=(1, 1), padding=0)
+        self.conv5_5 = Conv2D(config[2][0], config[2][1], kernel_size=(5, 5), stride=(1, 1), padding=2)
         self.max_pool_1 = nn.MaxPool2d(kernel_size=config[3][0], stride=1, padding=1)
-        self.conv_max_1 = Conv2d(input_size, out_channels=config[3][1], kernel_size=(1, 1), stride=(1, 1), padding=0)
+        self.conv_max_1 = Conv2D(input_size, out_channels=config[3][1], kernel_size=(1, 1), stride=(1, 1), padding=0)
         self.BatchNorm = nn.BatchNorm2d(num_features=config[0][0] + config[1][1] + config[3][1] + config[2][1])
         self.num = num
 
@@ -60,10 +60,10 @@ class Inception(nn.Module):
         super(Inception, self).__init__()
         self.inception_1 = InceptionBlock(depth_dim=1, input_size=2, config=[[2], [4, 8], [1, 2], [3, 2]], num='in1')
         self.inception_2 = InceptionBlock(1, 14, [[2], [2, 4], [1, 2], [3, 2]])
-        self.inception_3 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
-        self.inception_4 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
-        self.inception_5 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
-        self.inception_6 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
+        # self.inception_3 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
+        # self.inception_4 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
+        # self.inception_5 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
+        # self.inception_6 = InceptionBlock(1, 10, [[2], [2, 4], [1, 2], [3, 2]])
         self.max_pool_12 = nn.MaxPool2d(kernel_size=(1, 2), stride=(1, 2), padding=0)
         self.conv256 = nn.Conv2d(in_channels=10, out_channels=1, kernel_size=(1, 1))
 
@@ -71,10 +71,10 @@ class Inception(nn.Module):
         output = input_
         output = self.inception_1(output)
         output = self.inception_2(output)
-        output = self.inception_3(output)
-        output = self.inception_4(output)
-        output = self.inception_5(output)
-        output = self.inception_6(output)
+        # output = self.inception_3(output)
+        # output = self.inception_4(output)
+        # output = self.inception_5(output)
+        # output = self.inception_6(output)
         output = self.max_pool_12(output)
         output = self.conv256(output)
         output = torch.squeeze(output, dim=1)

@@ -7,7 +7,8 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
-from models.stagingnet import StagingNet
+# from models.sound_stage_net_v1 import SoundStageNetV1
+from models.sound_stage_net_v2 import SoundStageNetV2
 from dataset import get_current_class_distribution
 from tabulate import tabulate
 
@@ -18,8 +19,8 @@ learning_rate = 1e-3
 epochs = 10
 batch_size = 16
 
-model = StagingNet()
-# model.load_state_dict(torch.load("model_5.pth"))
+model = SoundStageNetV2()
+# model.load_state_dict(torch.load("model_6.pth"))
 model.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(pytorch_total_params)
@@ -35,7 +36,7 @@ def train_loop(dataloader, train_model, train_loss_fn, optimizer):
     # y is label(s, if batch > 1) of current data
     for batch_idx, (x, y) in enumerate(dataloader):
 
-        x = x[0].numpy()
+        x = x[0].numpy() # x[0] is audio data, x[1] is sampling rate
 
         # separate two channels
         input_left, input_right = separate_channels(x)
@@ -113,7 +114,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
 
     # compute the average test loss and accuracy
     test_loss /= num_batches
-    correct /= size
+    accuracy_all = correct / size
     accuracy = np.zeros(5)
     for i in range(len(size_class)):
         if size_class[i] == 0:
@@ -121,6 +122,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
     if not 0 in size_class:
         accuracy = correct_class / size_class
     accuracy = np.array([round(i, 2) for i in accuracy])
+    print(f"Accuracy for all classes: {(100 * accuracy_all):>0.1f}%\nAvg loss: {test_loss:>8f}\n")
 
     # compute the precision and recall
     precision = np.zeros(5)
@@ -151,6 +153,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
     header = ["PN1", "PN2", "PN3", "PREM", "PWK"]
     print("Confusion Matrix".center(46))
     print(tabulate(confusion_matrix, headers=header, showindex=index, tablefmt="fancy_grid"))
+    print(" ")
 
     # print test result
     index = ["Accuracy", "Precision", "Recall", "F1"]
@@ -158,7 +161,7 @@ def test_loop(dataloader, test_model, test_loss_fn):
     info = np.array([accuracy, precision, recall, f1])
     print("Performance Error".center(46))
     print(tabulate(info, headers=header, showindex=index, tablefmt="fancy_grid"))
-
+    print(" ")
 
 def main():
 
@@ -230,5 +233,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    torch.save(model.state_dict(), "model_6.pth")
-    print("Saved PyTorch Model State to model_6.pth")
+    save_path = "pretraining_SSNV2.pth"
+    torch.save(model.state_dict(), save_path)
+    print(f"Saved PyTorch Model State to {save_path}")
