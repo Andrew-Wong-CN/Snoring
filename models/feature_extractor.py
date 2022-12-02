@@ -10,7 +10,7 @@ class FeatureExtractor(nn.Module):
         self.Inception = Inception()
 
         # bi-lstm block * 1 for temporal aggregation
-        self.BiLSTM = BiLSTMBlock(input_size=10, hidden_size=5)
+        self.BiLSTM = BiLSTMBlock(input_size=10, hidden_size=5, random=False)
 
         # 1d convolutional layer, feature fusion, 10 features to 1
         self.Conv1D = nn.Conv1d(in_channels=469, out_channels=469, kernel_size=10)

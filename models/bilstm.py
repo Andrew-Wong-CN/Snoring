@@ -2,22 +2,23 @@ import torch
 import torch.nn as nn
 
 class BiLSTMBlock(nn.Module):
-    def __init__(self, input_size, hidden_size):
+    def __init__(self, input_size, hidden_size, random):
+        self.input_size = input_size
         self.hidden_size = hidden_size
         super(BiLSTMBlock, self).__init__()
-        self.random = False
-        self.bi_lstm = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
-                               num_layers=1, bidirectional=True, batch_first=True)
+        self.random = random
+        self.BiLSTM = nn.LSTM(input_size=input_size, hidden_size=hidden_size,
+                              num_layers=1, bidirectional=True, batch_first=True)
 
     def forward(self, input_):
-        batch = input_.shape[1]
-        time_resolution = input_.shape[0]
+        batch = input_.shape[0]
+        time_resolution = input_.shape[1]
         if not self.random:
-            output, (_, _) = self.bi_lstm(input_)
+            output, (_, _) = self.BiLSTM(input_)
             return output
-        h0 = torch.randn(time_resolution, batch, self.hidden_size)
-        c0 = torch.randn(time_resolution, batch, self.hidden_size)
-        output, (_, _) = self.bi_lstm(input_, (h0, c0))
+        h0 = torch.randn(2 * time_resolution, batch, self.input_size)
+        c0 = torch.randn(2 * time_resolution, batch, self.hidden_size)
+        output, (_, _) = self.BiLSTM(input_, (h0, c0))
         return output
 
 

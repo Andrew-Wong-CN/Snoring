@@ -8,19 +8,26 @@ from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
 # from models.sound_stage_net_v1 import SoundStageNetV1
-from models.sound_stage_net_v2 import SoundStageNetV2
+from models.sound_stage_net_v2 import PreTrainingNet, SoundStageNetV2
 from dataset import get_current_class_distribution
 from tabulate import tabulate
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
-learning_rate = 1e-3
-epochs = 10
+learning_rate = 1e-2
+epochs = 50
 batch_size = 16
 
+# initialize model
 model = SoundStageNetV2()
 # model.load_state_dict(torch.load("model_6.pth"))
+pretraining_model_state_dict = torch.load("parameters/pretraining_SSNV2.pth")
+model_state_dict = model.state_dict()
+for k, v in pretraining_model_state_dict.items():
+    if "FeatureExtractor" in k and k in model_state_dict.items():
+        model_state_dict[k] = pretraining_model_state_dict[k]
+model.load_state_dict(model_state_dict)
 model.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(pytorch_total_params)
@@ -171,7 +178,7 @@ def main():
     subjects = os.listdir(subject_path)
 
     # initialize optimizer
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=0.005)
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=0.005)
 
     # iterate train and test for 10 times
     for t in range(epochs):
@@ -233,6 +240,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-    save_path = "pretraining_SSNV2.pth"
+    save_path = "parameters/training_SSNV2.pth"
     torch.save(model.state_dict(), save_path)
     print(f"Saved PyTorch Model State to {save_path}")

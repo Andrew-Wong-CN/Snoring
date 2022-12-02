@@ -12,8 +12,8 @@ class FC(nn.Module):
         self.BN = nn.BatchNorm1d(out_features)
         self.ReLU = nn.ReLU()
 
-    def forward(self, x):
-        output = self.Linear(x)
+    def forward(self, input_):
+        output = self.Linear(input_)
         output = self.BN(output)
         output = self.ReLU(output)
         return output

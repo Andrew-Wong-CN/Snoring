@@ -1,10 +1,11 @@
 from models.feature_extractor import FeatureExtractor
 from models.classifier import Classifier
+from models.bilstm import BiLSTMBlock
 import torch.nn as nn
 
-class SoundStageNetV2(nn.Module):
+class PreTrainingNet(nn.Module):
     def __init__(self):
-        super(SoundStageNetV2, self).__init__()
+        super(PreTrainingNet, self).__init__()
 
         # feature extractor
         self.FeatureExtractor = FeatureExtractor()
@@ -15,5 +16,25 @@ class SoundStageNetV2(nn.Module):
     def forward(self, input_):
         output = self.FeatureExtractor(input_)
         output = output.reshape((output.shape[0], output.shape[1]))
+        output1, output2 = self.Classifier(output)
+        return output1, output2
+
+class SoundStageNetV2(nn.Module):
+    def __init__(self):
+        super(SoundStageNetV2, self).__init__()
+
+        # feature extractor
+        self.FeatureExtractor = FeatureExtractor()
+
+        # temporal aggregation
+        self.BiLSTM = BiLSTMBlock(input_size=469, hidden_size=200, random=False)
+
+        # classifier
+        self.Classifier = Classifier(in_features=400, out_features=5, mid_features=40)
+
+    def forward(self, input_):
+        output = self.FeatureExtractor(input_)
+        output = output.reshape((output.shape[0], output.shape[1]))
+        output = self.BiLSTM(output)
         output1, output2 = self.Classifier(output)
         return output1, output2
