@@ -12,6 +12,7 @@ from models.sound_stage_net_v2 import PreTrainingNet, SoundStageNetV2
 from dataset import get_current_class_distribution
 from tabulate import tabulate
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "2"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
@@ -232,7 +233,7 @@ def main():
                                      sampler=weighted_sampler_test)
 
             # train and test model
-            train_loop(dataloader=train_loader, train_model=model, train_loss_fn=loss_fn, optimizer=optimizer)
+            train_loop(train_loader, model, loss_fn, optimizer)
             test_loop(test_loader,model,loss_fn)
 
     print("Done")
