@@ -77,14 +77,17 @@ if __name__ == "__main__":
         snoring = subject_path + "\\" + "Snoring_16k"
         if not os.path.exists(snoring):
             os.makedirs(snoring)
-        audio_list = os.listdir(subject_path + "\\" + "Snoring")
-        m = 0
-        for audio in audio_list:
-            audio_name = str(m) + ".wav"
-            audio_path = subject_path + "\\" + "Snoring" + "\\" + audio
-            audio_data, sr = librosa.load(audio_path, sr=32000, mono=False)
-            audio_data = librosa.resample(audio_data, orig_sr=32000, target_sr=16000)
-            audio_data = audio_data.T
-            audio_save_path = snoring + "\\" + audio_name
-            wav.write(audio_save_path, 16000, audio_data)
-            m += 1
+            audio_list = os.listdir(subject_path + "\\" + "Snoring_32k")
+            m = 0
+            for audio in audio_list:
+                audio_name = str(m) + ".wav"
+                audio_path = subject_path + "\\" + "Snoring_32k" + "\\" + audio
+                audio_data, sr = librosa.load(audio_path, sr=32000, mono=False)
+                audio_data = librosa.resample(audio_data, orig_sr=32000, target_sr=16000)
+                audio_data = audio_data.T
+                audio_save_path = snoring + "\\" + audio_name
+                wav.write(audio_save_path, 16000, audio_data)
+                print(f"{subject}: {m} is done")
+                m += 1
+        else:
+            pass

@@ -7,28 +7,29 @@ from torch.utils.data import DataLoader, WeightedRandomSampler
 from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
-# from models.sound_stage_net_v1 import SoundStageNetV1
-from models.sound_stage_net_v2 import PreTrainingNet, SoundStageNetV2
+from models.sound_stage_net_v1 import SoundStageNetV1
+# from models.sound_stage_net_v2 import SoundStageNetV2
 from dataset import get_current_class_distribution
 from tabulate import tabulate
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
-learning_rate = 1e-2
+learning_rate = 1e-3
 epochs = 50
 batch_size = 16
+print((learning_rate, epochs, batch_size))
 
 # initialize model
-model = SoundStageNetV2()
-# model.load_state_dict(torch.load("model_6.pth"))
-pretraining_model_state_dict = torch.load("parameters/pretraining_SSNV2.pth")
-model_state_dict = model.state_dict()
-for k, v in pretraining_model_state_dict.items():
-    if "FeatureExtractor" in k and k in model_state_dict.items():
-        model_state_dict[k] = pretraining_model_state_dict[k]
-model.load_state_dict(model_state_dict)
+model = SoundStageNetV1()
+model.load_state_dict(torch.load("parameters/training_SSNV1.pth"))
+# pretraining_model_state_dict = torch.load("parameters/pretraining_SSNV2.pth")
+# model_state_dict = model.state_dict()
+# for k, v in pretraining_model_state_dict.items():
+#     if "FeatureExtractor" in k and k in model_state_dict.items():
+#         model_state_dict[k] = pretraining_model_state_dict[k]
+# model.load_state_dict(model_state_dict)
 model.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(pytorch_total_params)
@@ -171,10 +172,12 @@ def test_loop(dataloader, test_model, test_loss_fn):
     print(tabulate(info, headers=header, showindex=index, tablefmt="fancy_grid"))
     print(" ")
 
+    return accuracy, precision, recall, f1, accuracy_all
+
 def main():
 
     # subject means the data of each patient
-    subject_path = 'F:\\Dataset'
+    subject_path = '/data1/wqz/Dataset'
     print(os.listdir(subject_path))
     subjects = os.listdir(subject_path)
 
@@ -184,16 +187,26 @@ def main():
     # iterate train and test for 10 times
     for t in range(epochs):
         print(f"Epoch {t + 1}\n-------------------------------")
+        m = 0
+
+        # initialize performance of current epoch
+        acc = np.zeros(5)
+        prc = np.zeros(5)
+        rc = np.zeros(5)
+        f1_ = np.zeros(5)
+        acc_avg = 0.
+
         for subject in subjects:
-            print(f"Current subject: {subject}")
+            m += 1
+            print(f"Current subject: {subject} (Subject {m} / {len(subjects)}, Epoch {t + 1} / {epochs})")
 
             # initialize dataset
             dataset = SnoringDataset(
-                label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
-                dataset_path=f'{subject_path}\\{subject}\\Snoring_16k')
+                label_file=f'{subject_path}/{subject}/SleepStaging.csv',
+                dataset_path=f'{subject_path}/{subject}/Snoring_16k')
 
             # split train set and test set
-            train_test_size_file = open(f"{subject_path}\\{subject}\\TrainTestSize.txt", "r+")
+            train_test_size_file = open(f"{subject_path}/{subject}/TrainTestSize.txt", "r+")
             size = train_test_size_file.readlines()
             train_size = int(size[0])
             test_size = int(size[1])
@@ -202,9 +215,9 @@ def main():
 
             # compute weights
             # targets_train is a tensor of target labels of train set, targets_test is the same
-            targets_train = SnoringDataset.get_targets(label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
+            targets_train = SnoringDataset.get_targets(label_file=f'{subject_path}/{subject}/SleepStaging.csv',
                                                                    indices=train_dataset.indices)
-            targets_test = SnoringDataset.get_targets(label_file=f'{subject_path}\\{subject}\\SleepStaging.csv',
+            targets_test = SnoringDataset.get_targets(label_file=f'{subject_path}/{subject}/SleepStaging.csv',
                                                                  indices=test_dataset.indices)
             class_count_train = [i for i in get_current_class_distribution(targets_train).values()]
             class_count_test = [i for i in get_current_class_distribution(targets_test).values()]
@@ -234,13 +247,42 @@ def main():
 
             # train and test model
             train_loop(train_loader, model, loss_fn, optimizer)
-            test_loop(test_loader,model,loss_fn)
+            accuracy, precision, recall, f1, accuracy_all = test_loop(test_loader,model,loss_fn)
+
+            # compute overall performance
+            acc += accuracy
+            prc += precision
+            rc += recall
+            f1_ += f1
+            acc_avg += accuracy_all
+
+        # print overall performance error of current epoch
+        len_subj = len(subjects)
+        acc /= len_subj
+        acc = np.append(acc, sum(acc)/len(acc))
+        acc = np.array([round(i, 2) for i in acc])
+        prc /= len_subj
+        prc = np.append(prc, sum(prc)/len(prc))
+        prc = np.array([round(i, 2) for i in prc])
+        rc /= len_subj
+        rc = np.append(rc, sum(rc)/len(rc))
+        rc = np.array([round(i, 2) for i in rc])
+        f1_ /= len_subj
+        f1_ = np.append(f1_, sum(f1_)/len(f1_))
+        f1_ = np.array([round(i, 2) for i in f1_])
+        index = ["Accuracy", "Precision", "Recall", "F1"]
+        header = ["N1", "N2", "N3", "REM", "WK", "AVG"]
+        info = np.array([acc, prc, rc, f1_])
+        print("Overall Performance Error".center(50))
+        print(tabulate(info, headers=header, showindex=index, tablefmt="fancy_grid"))
+        print(f"Average Accuracy of Current Epoch: {acc_avg/len_subj}")
+        print(" ")
 
     print("Done")
 
 
 if __name__ == "__main__":
     main()
-    save_path = "parameters/training_SSNV2.pth"
+    save_path = "parameters/training_SSNV1.pth"
     torch.save(model.state_dict(), save_path)
     print(f"Saved PyTorch Model State to {save_path}")

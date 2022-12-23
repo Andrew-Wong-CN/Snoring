@@ -54,7 +54,6 @@ class InceptionBlock(nn.Module):
         output4 = self.conv_max_1(output4)
         return func.relu(self.BatchNorm(torch.cat([output1, output2, output3, output4], dim=self.depth_dim)))
 
-# TODO: fix parameters
 class Inception(nn.Module):
     def __init__(self):
         super(Inception, self).__init__()
