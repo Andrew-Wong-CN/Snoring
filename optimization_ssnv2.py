@@ -3,34 +3,37 @@ import numpy as np
 import torch
 import numpy
 from loss import loss_cross
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader
 from prepro import get_mel_phase_batch, concat_mel_and_phase
 from prepro import separate_channels
 from dataset import SnoringDataset
-from models.sound_stage_net_v1 import SoundStageNetV1
-# from models.sound_stage_net_v2 import SoundStageNetV2
-from dataset import get_current_class_distribution
+from models.sound_stage_net_v2 import SoundStageNetV2, SoundStageNetV2Test
+from models.classifier import Classifier
 from tabulate import tabulate
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
 learning_rate = 1e-3
 epochs = 50
 batch_size = 16
+batch_size_test = 8
 print((learning_rate, epochs, batch_size))
 
 # initialize model
-model = SoundStageNetV1()
-model.load_state_dict(torch.load("parameters/training_SSNV1.pth"))
-# pretraining_model_state_dict = torch.load("parameters/pretraining_SSNV2.pth")
-# model_state_dict = model.state_dict()
-# for k, v in pretraining_model_state_dict.items():
-#     if "FeatureExtractor" in k and k in model_state_dict.items():
-#         model_state_dict[k] = pretraining_model_state_dict[k]
-# model.load_state_dict(model_state_dict)
+model = SoundStageNetV2()
+pretraining_model_state_dict = torch.load("parameters/pretraining_SSNV2.pth")
+model_state_dict = model.state_dict()
+for k, v in pretraining_model_state_dict.items():
+    if "FeatureExtractor" in k and k in model_state_dict.items():
+        model_state_dict[k] = pretraining_model_state_dict[k]
+model.load_state_dict(model_state_dict)
 model.to(device)
+model_test = SoundStageNetV2Test()
+model_test.to(device)
+classifier = Classifier(in_features=400, out_features=5, mid_features=40)
+classifier.to(device)
 pytorch_total_params = sum(p.numel() for p in model.parameters())
 print(pytorch_total_params)
 loss_fn = loss_cross
@@ -98,6 +101,11 @@ def test_loop(dataloader, test_model, test_loss_fn):
             input_left, input_right = separate_channels(x)
             input_left_mel, input_left_phase = get_mel_phase_batch(input_left)
             input_right_mel, input_right_phase = get_mel_phase_batch(input_right)
+
+            # zero padding
+            zeros = np.zeros((int(input_left_mel.shape[0] / 2), input_left_mel.shape[1], input_left_mel.shape[2]))
+            input_left_mel = np.concatenate((zeros, input_left_mel, zeros), axis=0)
+            input_right_mel = np.concatenate((zeros, input_right_mel, zeros), axis=0)
             data = concat_mel_and_phase((input_left_mel, input_right_mel))
 
             # convert array to Tensor and move data to device
@@ -106,7 +114,9 @@ def test_loop(dataloader, test_model, test_loss_fn):
             y = y.to(device)
 
             # pred1 without softmax, pred2 with softmax
-            pred1, pred2 = test_model(data_torch)
+            pred= test_model(data_torch)
+            pred = pred[4:12]
+            pred1, pred2 = classifier(pred)
             test_loss += test_loss_fn(pred1, y).item()
 
             # compute the count of each label predicted correctly and the size of each label
@@ -211,43 +221,32 @@ def main():
             train_size = int(size[0])
             test_size = int(size[1])
             train_test_size_file.close()
-            train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, test_size])
-
-            # compute weights
-            # targets_train is a tensor of target labels of train set, targets_test is the same
-            targets_train = SnoringDataset.get_targets(label_file=f'{subject_path}/{subject}/SleepStaging.csv',
-                                                                   indices=train_dataset.indices)
-            targets_test = SnoringDataset.get_targets(label_file=f'{subject_path}/{subject}/SleepStaging.csv',
-                                                                 indices=test_dataset.indices)
-            class_count_train = [i for i in get_current_class_distribution(targets_train).values()]
-            class_count_test = [i for i in get_current_class_distribution(targets_test).values()]
-            class_weights_train = 1. / torch.tensor(class_count_train, dtype=torch.float32)
-            class_weights_test = 1. / torch.tensor(class_count_test, dtype=torch.float32)
-            weights_train = class_weights_train[targets_train]
-            weights_test = class_weights_test[targets_test]
-
-            # define the weighted random sampler
-            # replacement=True means samples can be drawn in multiple times
-            weighted_sampler_train = WeightedRandomSampler(weights=weights_train,
-                                                           num_samples=len(train_dataset),
-                                                           replacement=True)
-            weighted_sampler_test = WeightedRandomSampler(weights=weights_test,
-                                                          num_samples=len(test_dataset),
-                                                          replacement=True)
+            train_indices = []
+            test_indices = []
+            indices = np.arange((train_size + test_size))
+            for i in range(int(len(dataset) / batch_size)):
+                if i % 3 == 0 and (i / 3) * 16 < test_size: # split into test
+                    test_indices = np.concatenate((test_indices, indices[i * batch_size:(i + 1) * batch_size]), axis=0)
+                else:
+                    train_indices = np.concatenate((train_indices, indices[i * batch_size:(i + 1) * batch_size]), axis=0)
+            train_indices.reshape(train_size)
+            test_indices.reshape(test_size)
+            train_indices = train_indices.astype("int64")
+            test_indices = test_indices.astype("int64")
+            train_dataset = torch.utils.data.Subset(dataset, train_indices)
+            test_dataset = torch.utils.data.Subset(dataset, test_indices)
 
             # load data
             train_loader = DataLoader(dataset=train_dataset,
                                       batch_size=batch_size,
-                                      shuffle=False,
-                                      sampler=weighted_sampler_train)
+                                      shuffle=False)
             test_loader = DataLoader(dataset=test_dataset,
-                                     batch_size=batch_size,
-                                     shuffle=False,
-                                     sampler=weighted_sampler_test)
+                                     batch_size=batch_size_test,
+                                     shuffle=False)
 
             # train and test model
             train_loop(train_loader, model, loss_fn, optimizer)
-            accuracy, precision, recall, f1, accuracy_all = test_loop(test_loader,model,loss_fn)
+            accuracy, precision, recall, f1, accuracy_all = test_loop(test_loader, model_test, loss_fn)
 
             # compute overall performance
             acc += accuracy

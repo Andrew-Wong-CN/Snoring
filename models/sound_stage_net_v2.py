@@ -38,3 +38,19 @@ class SoundStageNetV2(nn.Module):
         output = self.BiLSTM(output)
         output1, output2 = self.Classifier(output)
         return output1, output2
+
+class SoundStageNetV2Test(nn.Module):
+    def __init__(self):
+        super(SoundStageNetV2Test, self).__init__()
+
+        # feature extractor
+        self.FeatureExtractor = FeatureExtractor()
+
+        # temporal aggregation
+        self.BiLSTM = BiLSTMBlock(input_size=469, hidden_size=200, random=False)
+
+    def forward(self, input_):
+        output = self.FeatureExtractor(input_)
+        output = output.reshape((output.shape[0], output.shape[1]))
+        output = self.BiLSTM(output)
+        return output
