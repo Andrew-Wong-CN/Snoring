@@ -57,9 +57,9 @@ def main(dataset_new_path, dataset_mpssc_path):
             for person in new_list:
                 for j in range(len(os.listdir(os.path.join(dataset_new_path, person, "Snoring_16k")))):
                     rand_noise = str(random.randint(0, 4))
-                    noise,  = librosa.load(os.path.join(dataset_new_path, person, "Noise", rand_noise + ".wav"))
+                    noise,_ = librosa.load(os.path.join(dataset_new_path, person, "Noise", rand_noise + ".wav"))
                     rand_snore = str(random.randint(0, 4))
-                    snore,  = librosa.load(os.path.join(dataset_new_path, person, "Snore", rand_noise + ".wav"))
+                    snore,_ = librosa.load(os.path.join(dataset_new_path, person, "Snore", rand_noise + ".wav"))
                     snr = get_SNR(snore, noise)
                     generate_audio(snore,noise,snr,"target address")
 
