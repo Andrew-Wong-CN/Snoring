@@ -4,7 +4,7 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/test" />
     </content>
-    <orderEntry type="jdk" jdkName="Remote Python 3.9.13 (sftp://wqz@202.114.66.76:10000/home/wqz/anaconda3/bin/python3.9)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.9 (python39) (2)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">
