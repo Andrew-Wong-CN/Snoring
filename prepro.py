@@ -3,6 +3,7 @@ import librosa
 import numpy
 import numpy as np
 import scipy.io.wavfile as wav
+import pandas as pd
 
 sample_rate = 16000  # sample rate
 sample_rate_original = 32000  # original sample rate
@@ -67,27 +68,78 @@ def concat_mel_and_phase(data):
         concat_data.append(list(map(lambda x: x[i], data)))
     return numpy.asarray(concat_data)
 
+def get_mel_phase(y):
+
+    # pre-emphasis
+    y = np.append(y[0], y[1:] - pre_emphasis * y[:-1])
+
+    # short time fourier transform
+    linear = librosa.stft(y=y,
+                          n_fft=n_fft,
+                          hop_length=hop_length,
+                          win_length=win_length,
+                          center=True)
+
+    # magnitude spectrogram
+    mag = np.abs(linear)  # (1+n_fft//2,T)
+
+    # compute a mel-scale spectrogram
+    mel = librosa.feature.melspectrogram(S=mag, n_mels=mel_frequency_bins)
+    mel = librosa.power_to_db(mel, ref=numpy.max)
+    mel = numpy.transpose(mel, (1, 0))
+
+    # get phase
+    phase = np.angle(mel) # return the angle of the complex argument
+
+    return mel, phase
+
 # run the code below to transpose all the 32k sampling audio into 16k sampling audio
 if __name__ == "__main__":
 
     folder = "F:\\Dataset"
     subjects = os.listdir(folder)
+    # for subject in subjects:
+    #     subject_path = folder + "\\" + subject
+    #     snoring = subject_path + "\\" + "Snoring_16k"
+    #     if not os.path.exists(snoring):
+    #         os.makedirs(snoring)
+    #         audio_list = os.listdir(subject_path + "\\" + "Snoring_32k")
+    #         m = 0
+    #         for audio in audio_list:
+    #             audio_name = str(m) + ".wav"
+    #             audio_path = subject_path + "\\" + "Snoring_32k" + "\\" + audio
+    #             audio_data, sr = librosa.load(audio_path, sr=32000, mono=False)
+    #             audio_data = librosa.resample(audio_data, orig_sr=32000, target_sr=16000)
+    #             audio_data = audio_data.T
+    #             audio_save_path = snoring + "\\" + audio_name
+    #             wav.write(audio_save_path, 16000, audio_data)
+    #             print(f"{subject}: {m} is done")
+    #             m += 1
+    #     else:
+    #         pass
+
     for subject in subjects:
         subject_path = folder + "\\" + subject
         snoring = subject_path + "\\" + "Snoring_16k"
-        if not os.path.exists(snoring):
-            os.makedirs(snoring)
-            audio_list = os.listdir(subject_path + "\\" + "Snoring_32k")
-            m = 0
-            for audio in audio_list:
-                audio_name = str(m) + ".wav"
-                audio_path = subject_path + "\\" + "Snoring_32k" + "\\" + audio
-                audio_data, sr = librosa.load(audio_path, sr=32000, mono=False)
-                audio_data = librosa.resample(audio_data, orig_sr=32000, target_sr=16000)
-                audio_data = audio_data.T
-                audio_save_path = snoring + "\\" + audio_name
-                wav.write(audio_save_path, 16000, audio_data)
-                print(f"{subject}: {m} is done")
-                m += 1
-        else:
-            pass
+        npy = subject_path + "\\" + "npy"
+        if not os.path.exists(npy):
+            os.makedirs(npy)
+            npy_list = os.listdir(subject_path + "\\" + "npy")
+        snoring_list = os.listdir(snoring)
+        m = 0
+        i = 0
+        for audio in snoring_list:
+            audio_name = str(m) + ".wav"
+            audio_path = snoring + "\\" + audio
+            audio_data, sr = librosa.load(audio_path, sr=16000, mono=False)
+            audio1 = audio_data[0]
+            audio2 = audio_data[1]
+            for j in range(10):
+                audio_mel1, _ = get_mel_phase(audio1[j*48000:])
+                audio_mel2, _ = get_mel_phase(audio2[j*48000:])
+                np.save(os.path.join(npy, str(m) + ".npy"), audio_mel1)
+                print(f"{subject}: {i} is done")
+                np.save(os.path.join(npy, str(m + 1) + ".npy"), audio_mel2)
+                print(f"{subject}: {i + 1} is done")
+                i += 2
+            m += 1
