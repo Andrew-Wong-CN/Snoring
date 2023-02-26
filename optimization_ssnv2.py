@@ -11,7 +11,7 @@ from models.sound_stage_net_v2 import SoundStageNetV2, SoundStageNetV2Test
 from models.classifier import Classifier
 from tabulate import tabulate
 
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using {device} device")
 
@@ -215,7 +215,9 @@ def main():
                 label_file=f'{subject_path}/{subject}/SleepStaging.csv',
                 dataset_path=f'{subject_path}/{subject}/Snoring_16k')
 
-            # split train set and test set
+            # split train set and test set sequentially
+            # the split method is below
+            # [test1(16), train1(16), train2(16), test2(16), train3(16), train4(16)...]
             train_test_size_file = open(f"{subject_path}/{subject}/TrainTestSize.txt", "r+")
             size = train_test_size_file.readlines()
             train_size = int(size[0])
