@@ -167,3 +167,25 @@ separate stereo audio into mono audio
 #         "N3": [accuracy[2], precision[2], recall[2], f1[2]],
 #         "REM": [accuracy[3], precision[3], recall[3], f1[3]],
 #         "WK": [accuracy[4], precision[4], recall[4], f1[4]]}
+
+# class SplicedDataset(Dataset):
+#     def __init__(self, label_file, dataset_path):
+#         self.label = pd.read_csv(label_file)
+#         self.dataset_path = dataset_path
+#
+#     def __len__(self):
+#         return len(self.labels)
+#
+#     def __getitem__(self, idx):
+#         audio_path = os.path.join(self.dataset_path, f'{self.labels.iloc[idx, 0]}.wav')
+#         audio = librosa.load(audio_path, sr=16000, mono=False)
+#         label = self.labels.iloc[idx, 1]
+#         return audio, label
+#
+#
+# spliced_dataset = SplicedDataset(label_file=label_file_path, dataset_path=spliced_path)
+#
+# train_spliced_dataset, test_spliced_dataset = torch.utils.data.random_split(spliced_dataset,[TRAIN_SIZE,TEST_SIZE])
+#
+# mpssc_train_loader = DataLoader(dataset=train_spliced_dataset, batch_size=BATCH_SIZE, shuffle=True)
+# mpssc_test_loader = DataLoader(dataset=test_spliced_dataset, batch_size=BATCH_SIZE, shuffle=True)

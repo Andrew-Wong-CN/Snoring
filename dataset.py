@@ -8,9 +8,10 @@ stage_dict = {
     'N1': 0,
     'N2': 1,
     'N3': 2,
-    'REM':3,
+    'REM': 3,
     'WK': 4,
 }
+
 
 class SnoringDataset(Dataset):
     def __init__(self, label_file, dataset_path):
@@ -24,10 +25,10 @@ class SnoringDataset(Dataset):
         audio_path = os.path.join(self.dataset_path, f'{self.labels.iloc[idx, 0]}.wav')
         audio = librosa.load(audio_path, sr=16000, mono=False)
         label = self.labels.iloc[idx, 1]
-        label_translated = stage_dict.get(label,'5')
+        label_translated = stage_dict.get(label, '5')
         return audio, label_translated
 
-    @ staticmethod
+    @staticmethod
     def get_targets(label_file, indices):
         """
         get targets list of dataset
@@ -88,8 +89,6 @@ def get_current_class_distribution(dataset):
     count_dict = {k: 0 for k, v in stage_dict.items()}
     for element in dataset:
         y_lbl = element
-        y_lbl = idx2class[y_lbl.item()] # convert number label to string label, like 0 to "N1"
+        y_lbl = idx2class[y_lbl.item()]  # convert number label to string label, like 0 to "N1"
         count_dict[y_lbl] += 1
     return count_dict
-
-
