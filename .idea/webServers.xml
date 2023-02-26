@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="853c8269-4b6b-4dc7-98b9-02cf0e8cf85b" name="zym@202.114.66.76:22 password">
+        <fileTransfer rootFolder="/home/yyh/disk10T/zym/SnoringStaging/Snoring" accessType="SFTP" host="202.114.66.76" port="22" sshConfigId="7b12c207-adba-4ac5-a255-6f61d9d7ebc0" sshConfig="zym@202.114.66.76:22 password">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" keepAliveTimeout="0" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>
