@@ -29,10 +29,10 @@ class SplicedDataset(Dataset):
         return len(self.labels)
 
     def __getitem__(self, idx):
-        audio_path = os.path.join(self.dataset_path, f'{self.labels.iloc[idx, 0]}.wav')
-        audio = librosa.load(audio_path, sr=16000, mono=False)
+        mel = np.load(self.dataset_path)
+        mel_frame = mel[idx]
         label = self.labels.iloc[idx, 1]
-        return audio, label
+        return mel_frame, label
 
 
 def main():
