@@ -21,12 +21,14 @@ Then, I will introduce some technical details about this project, **Snoring**.
 We recorded, selected, labeled, and processed 134-hour recordings of breath sounds during sleep with sleep stage labels. We recorded the breath sounds in hospital when patients were taking formal sleep staging monitor. We used mobile phones located on the side of patients to record their breath sounds during their sleeping. 
 
 <p>
-![image-20221203101350860](https://github.com/Ameixa551/Snoring/blob/master/images/device_place.png)
+
+![device_place](https://github.com/Ameixa551/Snoring/blob/master/images/device_place.png)
 
 </p>
 
 
 <p>
+
 ![image-20221203101350860](https://github.com/Ameixa551/Snoring/blob/master/images/image-20221203101350860.png)
 
 </p>
